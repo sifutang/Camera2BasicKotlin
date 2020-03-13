@@ -15,7 +15,9 @@
 -->
 <resources>
     <string name="app_name">Camera2Basic</string>
-    <string name="picture">Picture</string>
+    <string name="picture">拍照</string>
+    <string name="particle">粒子</string>
+    <string name="qr_code">二维码扫描</string>
     <string name="description_info">Info</string>
     <string name="request_permission">This sample needs camera permission.</string>
     <string name="camera_error">This device doesn\'t support Camera2 API.</string>

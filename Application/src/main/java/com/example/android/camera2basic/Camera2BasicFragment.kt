@@ -21,20 +21,8 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.ImageFormat
-import android.graphics.Matrix
-import android.graphics.Point
-import android.graphics.RectF
-import android.graphics.SurfaceTexture
-import android.hardware.camera2.CameraAccessException
-import android.hardware.camera2.CameraCaptureSession
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraDevice
-import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CameraMetadata
-import android.hardware.camera2.CaptureRequest
-import android.hardware.camera2.CaptureResult
-import android.hardware.camera2.TotalCaptureResult
+import android.graphics.*
+import android.hardware.camera2.*
 import android.media.ImageReader
 import android.os.Bundle
 import android.os.Handler
@@ -45,15 +33,15 @@ import android.support.v4.content.ContextCompat
 import android.util.Log
 import android.util.Size
 import android.util.SparseIntArray
-import android.view.LayoutInflater
-import android.view.Surface
-import android.view.TextureView
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
+import com.example.android.camera2basic.qrcode.QrScannerView
+import com.example.android.camera2basic.util.CommonUtil
 import com.example.android.camera2basic.util.GlTextureViewWrapper
+import com.google.zxing.*
+import com.google.zxing.common.HybridBinarizer
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.Arrays
-import java.util.Collections
+import java.util.*
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
@@ -90,6 +78,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * An [AutoFitTextureView] for camera preview.
      */
     private lateinit var textureView: AutoFitTextureView
+
+    /**
+     * An [QrScannerView] for QR Code
+     */
+    private lateinit var qrScannerView: QrScannerView
 
     /**
      * An [GlTextureViewWrapper] for wrap gl context to AutoFitTextureView
@@ -149,6 +142,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * An [ImageReader] that handles still image capture.
      */
     private var imageReader: ImageReader? = null
+
+    /**
+     * An additional thread for preview frame
+     */
+    private var previewFrameThread: HandlerThread? = null
+
+    /**
+     * An [Handler]] for preview frame
+     */
+    private var previewFrameHandler: Handler? = null
+
+    /**
+     * An [ImageReader] that handles yuv preview frame
+     */
+    private var yuvImageReader: ImageReader? = null
+
+    /**
+     * An [MultiFormatReader] for QRCode decode
+     */
+    private var multiFormatReader: MultiFormatReader? = null
 
     /**
      * This is the output file for our picture.
@@ -255,6 +268,65 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     }
 
+    private var count = 0
+    /**
+     * This a callback object for the [ImageReader]. "onImageAvailable" will be called when a
+     * preview frame generated.
+     */
+    private val onPreviewImageAvailableListener = ImageReader.OnImageAvailableListener {
+        val start = System.currentTimeMillis()
+        val image = it.acquireLatestImage() ?: return@OnImageAvailableListener
+
+        if (!qrScannerView.isShowing()) {
+            image.close()
+            return@OnImageAvailableListener
+        }
+
+        val width = image.width
+        val height = image.height
+        val yuvData = ByteArray(width * height * 3 / 2)
+        CommonUtil.readYuvDataToBuffer(image, ImageFormat.NV21, yuvData)
+        image.close()
+
+        count++
+        if (count == 20) {
+            val path = context.filesDir.path
+            Log.e(TAG, "dump image, path = $path")
+            val yuvImage = YuvImage(yuvData, ImageFormat.NV21, width, height, null)
+            val outputStream = ByteArrayOutputStream()
+            yuvImage.compressToJpeg(Rect(0, 0, width, height), 100, outputStream)
+            CommonUtil.saveImageByteData(outputStream.toByteArray(), path, "tmp.jpg");
+            return@OnImageAvailableListener
+        }
+
+        val frameRect = qrScannerView.getFrameRect()
+        val planarYUVLuminanceSource = PlanarYUVLuminanceSource(yuvData, width, height,
+                frameRect.top, frameRect.left, frameRect.width(), frameRect.height(),
+                false
+        )
+        val binaryBitmap = BinaryBitmap(HybridBinarizer(planarYUVLuminanceSource))
+        var decodeResult: Result? = null
+        try {
+            decodeResult = multiFormatReader?.decodeWithState(binaryBitmap)
+        } catch (ex: ReaderException) {
+
+        } finally {
+            multiFormatReader?.reset()
+        }
+        Log.d(TAG, "decode result = ${decodeResult?.text} consume = ${System.currentTimeMillis() - start}")
+
+//        if (decodeResult != null) {
+//            val pixels: IntArray = planarYUVLuminanceSource.renderThumbnail()
+//            val thumbnailWidth: Int = planarYUVLuminanceSource.thumbnailWidth
+//            val thumbnailHeight: Int = planarYUVLuminanceSource.thumbnailHeight
+//            val bitmap = Bitmap.createBitmap(pixels, 0, thumbnailWidth, thumbnailWidth, thumbnailHeight, Bitmap.Config.ARGB_8888)
+//            val out = ByteArrayOutputStream()
+//            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+//            CommonUtil.saveImageByteData(out.toByteArray(), context.filesDir.path, "qr_thumbnail_$start.jpg")
+//            Log.e(TAG, "dump qr code image, result = ${decodeResult.text}")
+//        }
+    }
+
     override fun onCreateView(inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
@@ -263,7 +335,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         view.findViewById<View>(R.id.picture).setOnClickListener(this)
         view.findViewById<View>(R.id.info).setOnClickListener(this)
+        view.findViewById<View>(R.id.particle).setOnClickListener(this)
+        view.findViewById<View>(R.id.qr_btn).setOnClickListener(this)
         textureView = view.findViewById(R.id.texture)
+        qrScannerView = view.findViewById(R.id.qr_code)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -372,8 +447,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
                     textureView.setAspectRatio(previewSize.width, previewSize.height)
+                    qrScannerView.setAspectRatio(previewSize.width, previewSize.height)
                 } else {
                     textureView.setAspectRatio(previewSize.height, previewSize.width)
+                    qrScannerView.setAspectRatio(previewSize.height, previewSize.width)
                 }
 
                 // Check if the flash is supported.
@@ -476,6 +553,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun startBackgroundThread() {
         backgroundThread = HandlerThread("CameraBackground").also { it.start() }
         backgroundHandler = Handler(backgroundThread?.looper)
+
+        previewFrameThread = HandlerThread("preview-frame-thread").also { it.start() }
+        previewFrameHandler = Handler(previewFrameThread?.looper)
     }
 
     /**
@@ -491,6 +571,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             Log.e(TAG, e.toString())
         }
 
+        previewFrameHandler?.removeCallbacksAndMessages(null)
+        previewFrameThread?.quitSafely()
+        previewFrameHandler = null
+        previewFrameThread = null
     }
 
     /**
@@ -500,7 +584,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         try {
             glTextureViewWrapper = GlTextureViewWrapper(context, textureView)
             glTextureViewWrapper?.setSize(previewSize.width, previewSize.height)
-
             // This is the output Surface we need to start preview.
             val surface = Surface(glTextureViewWrapper?.getInputSurfaceTexture())
 
@@ -510,8 +593,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             )
             previewRequestBuilder.addTarget(surface)
 
+
+            yuvImageReader = ImageReader.newInstance(
+                    previewSize.width, previewSize.height, ImageFormat.YUV_420_888, 2
+            )
+            yuvImageReader?.setOnImageAvailableListener(onPreviewImageAvailableListener, previewFrameHandler)
+            previewRequestBuilder.addTarget(yuvImageReader!!.surface)
             // Here, we create a CameraCaptureSession for camera preview.
-            cameraDevice?.createCaptureSession(Arrays.asList(surface, imageReader?.surface),
+            cameraDevice?.createCaptureSession(Arrays.asList(surface, imageReader?.surface, yuvImageReader?.surface),
                     object : CameraCaptureSession.StateCallback() {
 
                         override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
@@ -697,6 +786,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             .setMessage(R.string.intro_message)
                             .setPositiveButton(android.R.string.ok, null)
                             .show()
+                }
+            }
+            R.id.particle -> {
+                if (glTextureViewWrapper != null) {
+                    val isShowing = glTextureViewWrapper!!.particlesShowing()
+                    glTextureViewWrapper!!.drawParticle(!isShowing)
+                }
+            }
+            R.id.qr_btn -> {
+                qrScannerView.visibility = if (qrScannerView.visibility != View.VISIBLE) View.VISIBLE else View.GONE
+                if (multiFormatReader == null) {
+                    multiFormatReader = MultiFormatReader()
+                    val hints = Hashtable<DecodeHintType, Any?>(1)
+                    hints[DecodeHintType.CHARACTER_SET] = "UTF-8"
+                    multiFormatReader?.setHints(hints)
                 }
             }
         }

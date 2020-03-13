@@ -43,6 +43,8 @@ class GlTextureViewWrapper(
     private var mTransformMatrix = FloatArray(16)
     private val mLock = Object()
 
+    private var mDrawParticles = false
+
     override fun onFrameAvailable(surfaceTexture: SurfaceTexture?) {
         mGlHandler.sendMessage(Message.obtain(mGlHandler, M_DRAW))
     }
@@ -95,6 +97,14 @@ class GlTextureViewWrapper(
         mGlThread.quitSafely()
         mInputSurfaceTexture?.release()
         mInputSurfaceTexture = null
+    }
+
+    fun drawParticle(draw: Boolean) {
+        mDrawParticles = draw
+    }
+
+    fun particlesShowing(): Boolean {
+        return mDrawParticles
     }
 
     private fun unInitEGL() {
@@ -173,7 +183,9 @@ class GlTextureViewWrapper(
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         GLES20.glClearColor(0f, 0f, 0f, 0f)
         mCameraRender!!.drawTexture(mTransformMatrix, mOesTextureId)
-        mParticleRender?.drawSelf()
+        if (mDrawParticles) {
+            mParticleRender?.drawSelf()
+        }
         mEgl!!.eglSwapBuffers(mEglDisplay, mEglSurface)
     }
 }
