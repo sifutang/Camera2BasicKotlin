@@ -15,7 +15,7 @@ class QrScannerView: View {
 
     companion object {
         private const val TAG = "QrScannerView"
-        private const val MASK_COLOR = 0x30000000
+        private const val MASK_COLOR = 0x50000000
         private const val SCANNER_DURATION = 2000
     }
 

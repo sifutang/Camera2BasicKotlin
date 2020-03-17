@@ -24,9 +24,7 @@ import android.content.res.Configuration
 import android.graphics.*
 import android.hardware.camera2.*
 import android.media.ImageReader
-import android.os.Bundle
-import android.os.Handler
-import android.os.HandlerThread
+import android.os.*
 import android.support.v4.app.ActivityCompat
 import android.support.v4.app.Fragment
 import android.support.v4.content.ContextCompat
@@ -34,6 +32,8 @@ import android.util.Log
 import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
+import android.widget.ImageView
+import android.widget.Toast
 import com.example.android.camera2basic.qrcode.QrScannerView
 import com.example.android.camera2basic.util.CommonUtil
 import com.example.android.camera2basic.util.GlTextureViewWrapper
@@ -83,6 +83,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * An [QrScannerView] for QR Code
      */
     private lateinit var qrScannerView: QrScannerView
+
+    /**
+     * An [ImageView] for control flash on/off
+     */
+    private lateinit var qrFlashBtn: ImageView
 
     /**
      * An [GlTextureViewWrapper] for wrap gl context to AutoFitTextureView
@@ -154,11 +159,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var previewFrameHandler: Handler? = null
 
     /**
-     * An [ImageReader] that handles yuv preview frame
-     */
-    private var yuvImageReader: ImageReader? = null
-
-    /**
      * An [MultiFormatReader] for QRCode decode
      */
     private var multiFormatReader: MultiFormatReader? = null
@@ -215,7 +215,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         private fun process(result: CaptureResult) {
             when (state) {
-                STATE_PREVIEW -> Unit // Do nothing when the camera preview is working normally.
+                STATE_PREVIEW -> {
+                    if (qrScannerView.isShowing()) {
+                        val flashRequired = result.get(CaptureResult.CONTROL_AE_STATE) ==
+                                CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
+                        mainHandler.sendMessage(Message.obtain(mainHandler, MSG_FLASH_REQUIRE, flashRequired))
+                    }
+                }
                 STATE_WAITING_LOCK -> capturePicture(result)
                 STATE_WAITING_PRECAPTURE -> {
                     // CONTROL_AE_STATE can be null on some devices
@@ -268,7 +274,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     }
 
-    private var count = 0
+//    private var count = 0
     /**
      * This a callback object for the [ImageReader]. "onImageAvailable" will be called when a
      * preview frame generated.
@@ -288,16 +294,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         CommonUtil.readYuvDataToBuffer(image, ImageFormat.NV21, yuvData)
         image.close()
 
-        count++
-        if (count == 20) {
-            val path = context.filesDir.path
-            Log.e(TAG, "dump image, path = $path")
-            val yuvImage = YuvImage(yuvData, ImageFormat.NV21, width, height, null)
-            val outputStream = ByteArrayOutputStream()
-            yuvImage.compressToJpeg(Rect(0, 0, width, height), 100, outputStream)
-            CommonUtil.saveImageByteData(outputStream.toByteArray(), path, "tmp.jpg");
-            return@OnImageAvailableListener
-        }
+//        count++
+//        if (count == 20) {
+//            val path = context.filesDir.path
+//            Log.e(TAG, "dump image, path = $path")
+//            val yuvImage = YuvImage(yuvData, ImageFormat.NV21, width, height, null)
+//            val outputStream = ByteArrayOutputStream()
+//            yuvImage.compressToJpeg(Rect(0, 0, width, height), 100, outputStream)
+//            CommonUtil.saveImageByteData(outputStream.toByteArray(), path, "tmp.jpg");
+//            return@OnImageAvailableListener
+//        }
 
         val frameRect = qrScannerView.getFrameRect()
         val planarYUVLuminanceSource = PlanarYUVLuminanceSource(yuvData, width, height,
@@ -315,6 +321,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
         Log.d(TAG, "decode result = ${decodeResult?.text} consume = ${System.currentTimeMillis() - start}")
 
+        val result = decodeResult?.text
+        if (result != null && result != qrCodeScanResult) {
+            qrCodeScanResult = result
+            mainHandler.sendMessage(mainHandler.obtainMessage(MSG_QR_CODE_RESULT, result))
+        }
+
 //        if (decodeResult != null) {
 //            val pixels: IntArray = planarYUVLuminanceSource.renderThumbnail()
 //            val thumbnailWidth: Int = planarYUVLuminanceSource.thumbnailWidth
@@ -327,6 +339,25 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        }
     }
 
+    private val mainHandler = MainHandler(Looper.getMainLooper())
+    private var qrCodeScanResult: String? = null
+
+    private inner class MainHandler(looper: Looper) : Handler(looper) {
+        override fun handleMessage(msg: Message?) {
+            when(msg?.what) {
+                MSG_FLASH_REQUIRE -> {
+                    val flashRequire = msg.obj as Boolean
+//                    qrFlashBtn.visibility = if (flashRequire) View.VISIBLE else View.GONE
+                }
+                MSG_QR_CODE_RESULT -> {
+                    if (msg.obj != null) {
+                        Toast.makeText(context, msg.obj as String, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
     override fun onCreateView(inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
@@ -337,8 +368,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.info).setOnClickListener(this)
         view.findViewById<View>(R.id.particle).setOnClickListener(this)
         view.findViewById<View>(R.id.qr_btn).setOnClickListener(this)
+        view.findViewById<View>(R.id.qr_flash_btn).setOnClickListener(this)
         textureView = view.findViewById(R.id.texture)
         qrScannerView = view.findViewById(R.id.qr_code)
+        qrFlashBtn = view.findViewById(R.id.qr_flash_btn)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -594,13 +627,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             previewRequestBuilder.addTarget(surface)
 
 
-            yuvImageReader = ImageReader.newInstance(
+            val yuvImageReader = ImageReader.newInstance(
                     previewSize.width, previewSize.height, ImageFormat.YUV_420_888, 2
             )
-            yuvImageReader?.setOnImageAvailableListener(onPreviewImageAvailableListener, previewFrameHandler)
-            previewRequestBuilder.addTarget(yuvImageReader!!.surface)
+            yuvImageReader.setOnImageAvailableListener(onPreviewImageAvailableListener, previewFrameHandler)
+            previewRequestBuilder.addTarget(yuvImageReader.surface)
             // Here, we create a CameraCaptureSession for camera preview.
-            cameraDevice?.createCaptureSession(Arrays.asList(surface, imageReader?.surface, yuvImageReader?.surface),
+            cameraDevice?.createCaptureSession(Arrays.asList(surface, imageReader?.surface, yuvImageReader.surface),
                     object : CameraCaptureSession.StateCallback() {
 
                         override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
@@ -795,13 +828,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 }
             }
             R.id.qr_btn -> {
-                qrScannerView.visibility = if (qrScannerView.visibility != View.VISIBLE) View.VISIBLE else View.GONE
                 if (multiFormatReader == null) {
                     multiFormatReader = MultiFormatReader()
                     val hints = Hashtable<DecodeHintType, Any?>(1)
                     hints[DecodeHintType.CHARACTER_SET] = "UTF-8"
                     multiFormatReader?.setHints(hints)
                 }
+                qrScannerView.visibility = if (qrScannerView.visibility != View.VISIBLE) View.VISIBLE else View.GONE
+                if (qrScannerView.visibility != View.VISIBLE) {
+                    qrFlashBtn.visibility = View.GONE
+                }
+            }
+            R.id.qr_flash_btn -> {
+
             }
         }
     }
@@ -831,42 +870,46 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         /**
          * Tag for the [Log].
          */
-        private val TAG = "Camera2BasicFragment"
+        private const val TAG = "Camera2BasicFragment"
 
         /**
          * Camera state: Showing camera preview.
          */
-        private val STATE_PREVIEW = 0
+        private const val STATE_PREVIEW = 0
 
         /**
          * Camera state: Waiting for the focus to be locked.
          */
-        private val STATE_WAITING_LOCK = 1
+        private const val STATE_WAITING_LOCK = 1
 
         /**
          * Camera state: Waiting for the exposure to be precapture state.
          */
-        private val STATE_WAITING_PRECAPTURE = 2
+        private const val STATE_WAITING_PRECAPTURE = 2
 
         /**
          * Camera state: Waiting for the exposure state to be something other than precapture.
          */
-        private val STATE_WAITING_NON_PRECAPTURE = 3
+        private const val STATE_WAITING_NON_PRECAPTURE = 3
 
         /**
          * Camera state: Picture was taken.
          */
-        private val STATE_PICTURE_TAKEN = 4
+        private const val STATE_PICTURE_TAKEN = 4
 
         /**
          * Max preview width that is guaranteed by Camera2 API
          */
-        private val MAX_PREVIEW_WIDTH = 1920
+        private const val MAX_PREVIEW_WIDTH = 1920
 
         /**
          * Max preview height that is guaranteed by Camera2 API
          */
-        private val MAX_PREVIEW_HEIGHT = 1080
+        private const val MAX_PREVIEW_HEIGHT = 1080
+
+        private const val MSG_FLASH_REQUIRE = 10000
+
+        private const val MSG_QR_CODE_RESULT = 10001
 
         /**
          * Given `choices` of `Size`s supported by a camera, choose the smallest one that
