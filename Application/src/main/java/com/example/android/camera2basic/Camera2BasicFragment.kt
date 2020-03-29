@@ -33,6 +33,7 @@ import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
 import android.widget.ImageView
+import android.widget.SeekBar
 import android.widget.Toast
 import com.example.android.camera2basic.qrcode.QrScannerView
 import com.example.android.camera2basic.util.CommonUtil
@@ -372,6 +373,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         textureView = view.findViewById(R.id.texture)
         qrScannerView = view.findViewById(R.id.qr_code)
         qrFlashBtn = view.findViewById(R.id.qr_flash_btn)
+        val seekBar = view.findViewById<View>(R.id.seekBar) as SeekBar
+        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                glTextureViewWrapper?.onProgressChanged(progress)
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+            }
+        })
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {

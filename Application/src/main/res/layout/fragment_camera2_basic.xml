@@ -39,6 +39,14 @@
         android:visibility="gone"
         android:src="@drawable/qrcode_torch" />
 
+    <SeekBar
+        android:id="@+id/seekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/control"
+        android:layout_marginBottom="8dp"
+        android:progress="100"/>
+
     <FrameLayout
         android:id="@+id/control"
         android:layout_width="match_parent"

@@ -9,7 +9,7 @@ import android.os.HandlerThread
 import android.os.Message
 import android.util.Log
 import android.view.TextureView
-import com.example.android.camera2basic.camera.CameraRender
+import com.example.android.camera2basic.filter.FilterRender
 import com.example.android.camera2basic.particles.ParticlesRender
 import com.example.android.camera2basic.watermark.WaterMarkRender
 import javax.microedition.khronos.egl.*
@@ -23,14 +23,15 @@ class GlTextureViewWrapper(
         private const val TAG = "MyGlSurfaceProvider"
         private const val M_INIT = 0
         private const val M_DRAW = 1
-        private const val M_UN_INIT = 2
+        private const val M_SIZE_CHANGE = 2
+        private const val M_UN_INIT = 3
     }
 
     private var mGlThread: HandlerThread = HandlerThread("gl_thread")
     private var mGlHandler: Handler
 
     private var mInputSurfaceTexture: SurfaceTexture? = null
-    private var mCameraRender: CameraRender? = null
+    private var mFilterRender: FilterRender? = null
     private var mParticleRender: ParticlesRender? = null
     private var mWaterMarkRender: WaterMarkRender? = null
 
@@ -62,6 +63,14 @@ class GlTextureViewWrapper(
                     M_DRAW -> {
                         drawFrame()
                     }
+                    M_SIZE_CHANGE -> {
+                        val width = msg.arg1
+                        val height = msg.arg2
+                        GLES20.glViewport(0, 0, height, width)
+                        mParticleRender?.onSizeChanged(width, height)
+                        mWaterMarkRender?.onSizeChanged(width, height)
+                        mFilterRender?.onSizeChanged(width, height)
+                    }
                     M_UN_INIT -> {
                         unInitEGL()
                     }
@@ -75,9 +84,7 @@ class GlTextureViewWrapper(
         val surfaceTexture = getInputSurfaceTexture()
         surfaceTexture.setDefaultBufferSize(width, height)
         surfaceTexture.setOnFrameAvailableListener(this)
-        GLES20.glViewport(0, 0, height, width)
-        mParticleRender?.onSizeChanged(width, height)
-        mWaterMarkRender?.onSizeChanged(width, height)
+        mGlHandler.sendMessage(mGlHandler.obtainMessage(M_SIZE_CHANGE, width, height))
     }
 
     fun getInputSurfaceTexture(): SurfaceTexture {
@@ -118,6 +125,7 @@ class GlTextureViewWrapper(
             mEgl?.eglDestroyContext(mEglDisplay, mEglContext)
             mEgl?.eglTerminate(mEglDisplay)
         }
+        mFilterRender?.release()
     }
 
     private fun initEGL() {
@@ -166,7 +174,7 @@ class GlTextureViewWrapper(
         }
 
         mOesTextureId = OpenGlUtils.createOESTextureObject()
-        mCameraRender = CameraRender(mContext)
+        mFilterRender = FilterRender(mContext)
         mParticleRender = ParticlesRender(mContext)
         mWaterMarkRender = WaterMarkRender(mContext)
         synchronized(mLock) {
@@ -186,11 +194,15 @@ class GlTextureViewWrapper(
         mEgl!!.eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         GLES20.glClearColor(0f, 0f, 0f, 0f)
-        mCameraRender!!.drawTexture(mTransformMatrix, mOesTextureId)
+        mFilterRender!!.drawTexture(mTransformMatrix, mOesTextureId)
         mWaterMarkRender?.drawSelf()
         if (mDrawParticles) {
             mParticleRender?.drawSelf()
         }
         mEgl!!.eglSwapBuffers(mEglDisplay, mEglSurface)
+    }
+
+    fun onProgressChanged(progress: Int) {
+        mFilterRender?.onProgressChanged(progress)
     }
 }

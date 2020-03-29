@@ -14,9 +14,9 @@ class CameraRender(context: Context) {
                  1f,  1f, 1f, 1f,
                  1f, -1f, 1f, 0f
         )
-        private const val VERTEX_COMPONENT_COUNT = 2
-        private const val COORDINATE_COMPONENT_COUNT = 2
-        private const val STRIDE =
+        const val VERTEX_COMPONENT_COUNT = 2
+        const val COORDINATE_COMPONENT_COUNT = 2
+        const val STRIDE =
                 (VERTEX_COMPONENT_COUNT + COORDINATE_COMPONENT_COUNT) * Constants.BYTES_PRE_FLOAT
     }
 
