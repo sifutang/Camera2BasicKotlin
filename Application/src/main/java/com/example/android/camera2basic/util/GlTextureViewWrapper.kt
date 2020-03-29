@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.TextureView
 import com.example.android.camera2basic.camera.CameraRender
 import com.example.android.camera2basic.particles.ParticlesRender
+import com.example.android.camera2basic.watermark.WaterMarkRender
 import javax.microedition.khronos.egl.*
 
 class GlTextureViewWrapper(
@@ -31,6 +32,7 @@ class GlTextureViewWrapper(
     private var mInputSurfaceTexture: SurfaceTexture? = null
     private var mCameraRender: CameraRender? = null
     private var mParticleRender: ParticlesRender? = null
+    private var mWaterMarkRender: WaterMarkRender? = null
 
     private var mEgl: EGL10? = null
     private var mEglDisplay = EGL10.EGL_NO_DISPLAY
@@ -75,6 +77,7 @@ class GlTextureViewWrapper(
         surfaceTexture.setOnFrameAvailableListener(this)
         GLES20.glViewport(0, 0, height, width)
         mParticleRender?.onSizeChanged(width, height)
+        mWaterMarkRender?.onSizeChanged(width, height)
     }
 
     fun getInputSurfaceTexture(): SurfaceTexture {
@@ -165,6 +168,7 @@ class GlTextureViewWrapper(
         mOesTextureId = OpenGlUtils.createOESTextureObject()
         mCameraRender = CameraRender(mContext)
         mParticleRender = ParticlesRender(mContext)
+        mWaterMarkRender = WaterMarkRender(mContext)
         synchronized(mLock) {
             mLock.notify()
         }
@@ -183,6 +187,7 @@ class GlTextureViewWrapper(
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         GLES20.glClearColor(0f, 0f, 0f, 0f)
         mCameraRender!!.drawTexture(mTransformMatrix, mOesTextureId)
+        mWaterMarkRender?.drawSelf()
         if (mDrawParticles) {
             mParticleRender?.drawSelf()
         }
