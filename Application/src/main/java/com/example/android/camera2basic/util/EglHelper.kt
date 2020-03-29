@@ -1,23 +1,14 @@
 package com.example.android.camera2basic.util
 
-import android.content.Context
 import android.graphics.SurfaceTexture
 import android.opengl.EGL14
-import android.opengl.GLES20
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Message
 import android.util.Log
-import android.view.TextureView
-import com.example.android.camera2basic.filter.FilterRender
-import com.example.android.camera2basic.particles.ParticlesRender
-import com.example.android.camera2basic.watermark.WaterMarkRender
 import javax.microedition.khronos.egl.*
 
-class GlTextureViewWrapper(
-        context: Context,
-        private var textureView: TextureView
-): SurfaceTexture.OnFrameAvailableListener {
+class EglHelper(private var outputSurfaceTexture: SurfaceTexture) {
 
     companion object {
         private const val TAG = "MyGlSurfaceProvider"
@@ -30,26 +21,36 @@ class GlTextureViewWrapper(
     private var mGlThread: HandlerThread = HandlerThread("gl_thread")
     private var mGlHandler: Handler
 
-    private var mInputSurfaceTexture: SurfaceTexture? = null
-    private var mFilterRender: FilterRender? = null
-    private var mParticleRender: ParticlesRender? = null
-    private var mWaterMarkRender: WaterMarkRender? = null
-
     private var mEgl: EGL10? = null
     private var mEglDisplay = EGL10.EGL_NO_DISPLAY
     private var mEglContext = EGL10.EGL_NO_CONTEXT
     private var mEglConfig = arrayOfNulls<EGLConfig>(1)
     private var mEglSurface: EGLSurface? = null
-    private var mContext = context
 
-    private var mOesTextureId = -1
-    private var mTransformMatrix = FloatArray(16)
-    private val mLock = Object()
+    private var render: Render? = null
+    private var width = -1
+    private var height = -1
 
-    private var mDrawParticles = false
+    interface Render {
+        /**
+         * Called when the surface is created or recreated.
+         */
+        fun onSurfaceCreated(egl: EGL10?)
 
-    override fun onFrameAvailable(surfaceTexture: SurfaceTexture?) {
-        mGlHandler.sendMessage(Message.obtain(mGlHandler, M_DRAW))
+        /**
+         * Called when the surface changed size.
+         */
+        fun onSurfaceChanged(egl: EGL10?, width: Int, height: Int)
+
+        /**
+         * Called to draw the current frame.
+         */
+        fun onDrawFrame(egl: EGL10?)
+
+        /**
+         * Called when egl context release.
+         */
+        fun onSurfaceDestroy()
     }
 
     init {
@@ -64,12 +65,7 @@ class GlTextureViewWrapper(
                         drawFrame()
                     }
                     M_SIZE_CHANGE -> {
-                        val width = msg.arg1
-                        val height = msg.arg2
-                        GLES20.glViewport(0, 0, height, width)
-                        mParticleRender?.onSizeChanged(width, height)
-                        mWaterMarkRender?.onSizeChanged(width, height)
-                        mFilterRender?.onSizeChanged(width, height)
+                        render?.onSurfaceChanged(mEgl, msg.arg1, msg.arg2)
                     }
                     M_UN_INIT -> {
                         unInitEGL()
@@ -80,52 +76,37 @@ class GlTextureViewWrapper(
         mGlHandler.sendEmptyMessage(M_INIT)
     }
 
-    fun setSize(width: Int, height: Int) {
-        val surfaceTexture = getInputSurfaceTexture()
-        surfaceTexture.setDefaultBufferSize(width, height)
-        surfaceTexture.setOnFrameAvailableListener(this)
-        mGlHandler.sendMessage(mGlHandler.obtainMessage(M_SIZE_CHANGE, width, height))
+    fun setRender(render: Render) {
+        this.render = render
     }
 
-    fun getInputSurfaceTexture(): SurfaceTexture {
-        synchronized(mLock) {
-            while (mOesTextureId == -1) {
-                mLock.wait()
-            }
+    fun setSize(width: Int, height: Int) {
+        if (this.width != width || this.height != height) {
+            mGlHandler.sendMessage(mGlHandler.obtainMessage(M_SIZE_CHANGE, width, height))
         }
 
-        if (mInputSurfaceTexture == null) {
-            mInputSurfaceTexture = SurfaceTexture(mOesTextureId)
-        }
+        this.width = width
+        this.height = height
+    }
 
-        return mInputSurfaceTexture!!
+    fun requestDraw() {
+        mGlHandler.sendMessage(Message.obtain(mGlHandler, M_DRAW))
     }
 
     fun release() {
         Log.d(TAG, "release: ")
         mGlHandler.sendEmptyMessage(M_UN_INIT)
         mGlThread.quitSafely()
-        mInputSurfaceTexture?.release()
-        mInputSurfaceTexture = null
-    }
-
-    fun drawParticle(draw: Boolean) {
-        mDrawParticles = draw
-    }
-
-    fun particlesShowing(): Boolean {
-        return mDrawParticles
     }
 
     private fun unInitEGL() {
-        OpenGlUtils.deleteTexture(mOesTextureId)
+        render?.onSurfaceDestroy()
         if (mEglDisplay != EGL10.EGL_NO_DISPLAY) {
             mEgl?.eglDestroySurface(mEglDisplay, mEglSurface)
             mEgl?.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_CONTEXT)
             mEgl?.eglDestroyContext(mEglDisplay, mEglContext)
             mEgl?.eglTerminate(mEglDisplay)
         }
-        mFilterRender?.release()
     }
 
     private fun initEGL() {
@@ -156,11 +137,7 @@ class GlTextureViewWrapper(
             throw RuntimeException("eglChooseConfig failed! " + mEgl!!.eglGetError())
         }
 
-        if (textureView.surfaceTexture == null) {
-            throw RuntimeException("not output surface texture")
-        }
-
-        mEglSurface = mEgl!!.eglCreateWindowSurface(mEglDisplay, mEglConfig[0], textureView.surfaceTexture, null)
+        mEglSurface = mEgl!!.eglCreateWindowSurface(mEglDisplay, mEglConfig[0], outputSurfaceTexture, null)
 
         val contextAttributes = intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL10.EGL_NONE)
         mEglContext = mEgl!!.eglCreateContext(mEglDisplay, mEglConfig[0], EGL10.EGL_NO_CONTEXT, contextAttributes)
@@ -172,37 +149,14 @@ class GlTextureViewWrapper(
         if (!mEgl!!.eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext)) {
             throw RuntimeException("eglMakeCurrent failed! " + mEgl!!.eglGetError())
         }
-
-        mOesTextureId = OpenGlUtils.createOESTextureObject()
-        mFilterRender = FilterRender(mContext)
-        mParticleRender = ParticlesRender(mContext)
-        mWaterMarkRender = WaterMarkRender(mContext)
-        synchronized(mLock) {
-            mLock.notify()
-        }
         Log.d(TAG, "init egl context")
+
+        render?.onSurfaceCreated(mEgl)
     }
 
     private fun drawFrame() {
-        if (mInputSurfaceTexture == null) {
-            throw RuntimeException("input surface-texture not set, pls call getInputSurfaceTexture()")
-        }
-
-        mInputSurfaceTexture!!.updateTexImage()
-        mInputSurfaceTexture!!.getTransformMatrix(mTransformMatrix)
-
         mEgl!!.eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext)
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-        GLES20.glClearColor(0f, 0f, 0f, 0f)
-        mFilterRender!!.drawTexture(mTransformMatrix, mOesTextureId)
-        mWaterMarkRender?.drawSelf()
-        if (mDrawParticles) {
-            mParticleRender?.drawSelf()
-        }
+        render?.onDrawFrame(mEgl)
         mEgl!!.eglSwapBuffers(mEglDisplay, mEglSurface)
-    }
-
-    fun onProgressChanged(progress: Int) {
-        mFilterRender?.onProgressChanged(progress)
     }
 }

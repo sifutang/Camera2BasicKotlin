@@ -16,6 +16,7 @@
 
 package com.example.android.camera2basic
 
+import GLTextureViewWrapper
 import android.Manifest
 import android.app.AlertDialog
 import android.content.Context
@@ -37,10 +38,8 @@ import android.widget.SeekBar
 import android.widget.Toast
 import com.example.android.camera2basic.qrcode.QrScannerView
 import com.example.android.camera2basic.util.CommonUtil
-import com.example.android.camera2basic.util.GlTextureViewWrapper
 import com.google.zxing.*
 import com.google.zxing.common.HybridBinarizer
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.*
 import java.util.concurrent.Semaphore
@@ -91,9 +90,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private lateinit var qrFlashBtn: ImageView
 
     /**
-     * An [GlTextureViewWrapper] for wrap gl context to AutoFitTextureView
+     * An [GLTextureViewWrapper] for wrap AutoFitTextureView
      */
-    private var glTextureViewWrapper: GlTextureViewWrapper? = null
+    private var glTextureViewWrapper: GLTextureViewWrapper? = null
 
     /**
      * A [CameraCaptureSession] for camera preview.
@@ -628,8 +627,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      */
     private fun createCameraPreviewSession() {
         try {
-            glTextureViewWrapper = GlTextureViewWrapper(context, textureView)
-            glTextureViewWrapper?.setSize(previewSize.width, previewSize.height)
+            glTextureViewWrapper = GLTextureViewWrapper(context, textureView.surfaceTexture)
+            glTextureViewWrapper?.setPreviewSize(previewSize)
             // This is the output Surface we need to start preview.
             val surface = Surface(glTextureViewWrapper?.getInputSurfaceTexture())
 
