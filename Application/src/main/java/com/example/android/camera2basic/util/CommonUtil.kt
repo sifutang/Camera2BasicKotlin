@@ -2,7 +2,6 @@ package com.example.android.camera2basic.util
 
 import android.graphics.ImageFormat
 import android.media.Image
-import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -11,6 +10,10 @@ import kotlin.math.min
 object CommonUtil {
 
     private const val TAG = "CommonUtil"
+
+    fun clamp(amount: Float, low: Float, high: Float): Float {
+        return if (amount < low) low else if (amount > high) high else amount
+    }
 
     /**
      * take YUV image from image.
