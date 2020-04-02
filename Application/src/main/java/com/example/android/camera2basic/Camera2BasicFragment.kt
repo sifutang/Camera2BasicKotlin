@@ -149,6 +149,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var imageReader: ImageReader? = null
 
     /**
+     * An [ImageReader] that handles image analytics
+     */
+    private var yuvImageReader: ImageReader? = null
+
+    /**
      * An additional thread for preview frame
      */
     private var previewFrameThread: HandlerThread? = null
@@ -584,6 +589,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             cameraDevice = null
             imageReader?.close()
             imageReader = null
+            yuvImageReader?.close()
+            yuvImageReader = null
             glTextureViewWrapper?.release()
         } catch (e: InterruptedException) {
             throw RuntimeException("Interrupted while trying to lock camera closing.", e)
@@ -639,13 +646,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             previewRequestBuilder.addTarget(surface)
 
 
-            val yuvImageReader = ImageReader.newInstance(
+            yuvImageReader = ImageReader.newInstance(
                     previewSize.width, previewSize.height, ImageFormat.YUV_420_888, 2
             )
-            yuvImageReader.setOnImageAvailableListener(onPreviewImageAvailableListener, previewFrameHandler)
-            previewRequestBuilder.addTarget(yuvImageReader.surface)
+            yuvImageReader!!.setOnImageAvailableListener(onPreviewImageAvailableListener, previewFrameHandler)
+            previewRequestBuilder.addTarget(yuvImageReader!!.surface)
             // Here, we create a CameraCaptureSession for camera preview.
-            cameraDevice?.createCaptureSession(Arrays.asList(surface, imageReader?.surface, yuvImageReader.surface),
+            cameraDevice?.createCaptureSession(Arrays.asList(surface, imageReader?.surface, yuvImageReader!!.surface),
                     object : CameraCaptureSession.StateCallback() {
 
                         override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
