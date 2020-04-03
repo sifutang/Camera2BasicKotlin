@@ -1,3 +1,5 @@
+package com.example.android.camera2basic
+
 import android.content.Context
 import android.graphics.SurfaceTexture
 import android.opengl.GLES20

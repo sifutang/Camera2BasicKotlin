@@ -14,7 +14,7 @@
  limitations under the License.
 -->
 <resources>
-    <string name="app_name">Camera2Basic</string>
+    <string name="app_name">Camera2</string>
     <string name="picture">拍照</string>
     <string name="particle">粒子</string>
     <string name="qr_code">二维码扫描</string>
