@@ -44,6 +44,8 @@ import java.util.*
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
+import kotlin.math.max
+import kotlin.math.min
 
 class Camera2BasicFragment : Fragment(), View.OnClickListener,
         ActivityCompat.OnRequestPermissionsResultCallback {
@@ -72,6 +74,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * ID of the current [CameraDevice].
      */
     private lateinit var cameraId: String
+
+    private var cameraCharacteristics: CameraCharacteristics? = null
+    private var cropRect: Rect? = null
+    private var currentZoomRatio = 1f
 
     /**
      * An [AutoFitTextureView] for camera preview.
@@ -220,6 +226,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private fun process(result: CaptureResult) {
             when (state) {
                 STATE_PREVIEW -> {
+                    cropRect = result.get(CaptureResult.SCALER_CROP_REGION)
                     if (qrScannerView.isShowing()) {
                         val flashRequired = result.get(CaptureResult.CONTROL_AE_STATE) ==
                                 CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
@@ -388,6 +395,32 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
             }
         })
+
+        (activity as CameraActivity).registerTouchListener(object : CameraActivity.OnTouchEventListener {
+            override fun onScale(scaleFactor: Float) {
+                if (cropRect != null) {
+                    val sensorRect = cameraCharacteristics?.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+                    val maxZoomRatio = cameraCharacteristics?.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
+                    if (sensorRect != null && maxZoomRatio != null) {
+                        currentZoomRatio *= scaleFactor
+                        currentZoomRatio = min(currentZoomRatio, maxZoomRatio)
+                        currentZoomRatio = max(1f, currentZoomRatio)
+                        Log.d(TAG, "onScale: factor = $scaleFactor, currentZoomRatio = $currentZoomRatio")
+                        val centerX = sensorRect.width() / 2
+                        val centerY = sensorRect.height() / 2
+                        val xDel = (0.5f * sensorRect.width() / currentZoomRatio).toInt()
+                        val yDel = (0.5f * sensorRect.height() / currentZoomRatio).toInt()
+                        val rect = Rect(centerX - xDel, centerY - yDel,
+                                centerX + xDel, centerY + yDel)
+                        previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, rect)
+                        previewRequest = previewRequestBuilder.build()
+                        captureSession?.setRepeatingRequest(previewRequest,
+                                captureCallback, backgroundHandler)
+                    }
+                }
+
+            }
+        })
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -413,7 +446,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     override fun onPause() {
         closeCamera()
         stopBackgroundThread()
+        currentZoomRatio = 1f
+        cropRect = null
         super.onPause()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        (activity as CameraActivity).registerTouchListener(null)
     }
 
     private fun requestCameraPermission() {
@@ -507,6 +547,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
 
                 this.cameraId = cameraId
+                this.cameraCharacteristics = characteristics
 
                 // We've found a viable camera and finished setting up member variables,
                 // so we don't need to iterate through other available cameras.

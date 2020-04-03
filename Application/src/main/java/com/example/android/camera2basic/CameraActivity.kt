@@ -18,8 +18,33 @@ package com.example.android.camera2basic
 
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 
 class CameraActivity : AppCompatActivity() {
+
+    interface OnTouchEventListener {
+        fun onScale(scaleFactor: Float)
+    }
+    private var touchListener: OnTouchEventListener? = null
+
+    private lateinit var scaleGestureDetector: ScaleGestureDetector
+
+    private val scaleGestureDetectorListener = object : ScaleGestureDetector.OnScaleGestureListener {
+        override fun onScaleBegin(detector: ScaleGestureDetector?): Boolean {
+            return true
+        }
+
+        override fun onScaleEnd(detector: ScaleGestureDetector?) {
+        }
+
+        override fun onScale(detector: ScaleGestureDetector?): Boolean {
+            if (detector != null) {
+                touchListener?.onScale(detector.scaleFactor)
+            }
+            return true
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +52,18 @@ class CameraActivity : AppCompatActivity() {
         savedInstanceState ?: supportFragmentManager.beginTransaction()
                 .replace(R.id.container, Camera2BasicFragment.newInstance())
                 .commit()
+
+        scaleGestureDetector = ScaleGestureDetector(this, scaleGestureDetectorListener)
+
+    }
+
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        scaleGestureDetector.onTouchEvent(event)
+        return super.onTouchEvent(event)
+    }
+
+    fun registerTouchListener(listener: OnTouchEventListener?) {
+        touchListener = listener
     }
 
 }
