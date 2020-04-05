@@ -5,10 +5,11 @@ import android.graphics.SurfaceTexture
 import android.opengl.GLES20
 import android.util.Log
 import android.util.Size
+import com.example.android.camera2basic.camera.CameraRender
 import com.example.android.camera2basic.filter.FilterRender
 import com.example.android.camera2basic.particles.ParticlesRender
 import com.example.android.camera2basic.util.EglHelper
-import com.example.android.camera2basic.util.OpenGlUtils
+import com.example.android.camera2basic.util.TextureHelper
 import com.example.android.camera2basic.watermark.WaterMarkRender
 import javax.microedition.khronos.egl.EGL10
 
@@ -24,6 +25,7 @@ class GLTextureViewWrapper(
     private var eglHelper = EglHelper(outputSurfaceTexture)
     private var mInputSurfaceTexture: SurfaceTexture? = null
 
+    private var mCameraRender: CameraRender? = null
     private var mFilterRender: FilterRender? = null
     private var mParticleRender: ParticlesRender? = null
     private var mWaterMarkRender: WaterMarkRender? = null
@@ -33,6 +35,7 @@ class GLTextureViewWrapper(
     private val mLock = Object()
 
     private var mDrawParticles = false
+    private var mDrawFilter = false
 
     init {
         eglHelper.setRender(this)
@@ -48,8 +51,9 @@ class GLTextureViewWrapper(
 
     override fun onSurfaceCreated(egl: EGL10?) {
         Log.d(TAG, "onSurfaceCreated")
-        mOesTextureId = OpenGlUtils.createOESTextureObject()
+        mOesTextureId = TextureHelper.createOESTextureObject()
 
+        mCameraRender = CameraRender(context)
         mFilterRender = FilterRender(context)
         mParticleRender = ParticlesRender(context)
         mWaterMarkRender = WaterMarkRender(context)
@@ -77,7 +81,11 @@ class GLTextureViewWrapper(
         GLES20.glClearColor(0f, 0f, 0f, 0f)
         mInputSurfaceTexture!!.updateTexImage()
         mInputSurfaceTexture!!.getTransformMatrix(transformMatrix)
-        mFilterRender?.drawTexture(transformMatrix, mOesTextureId)
+        if (mDrawFilter) {
+            mFilterRender?.drawTexture(transformMatrix, mOesTextureId)
+        } else {
+            mCameraRender?.drawTexture(transformMatrix, mOesTextureId)
+        }
         mWaterMarkRender?.drawSelf()
         if (mDrawParticles) {
             mParticleRender?.drawSelf()
@@ -88,7 +96,7 @@ class GLTextureViewWrapper(
         Log.d(TAG, "onSurfaceDestroy")
         mInputSurfaceTexture?.release()
         mInputSurfaceTexture = null
-        OpenGlUtils.deleteTexture(mOesTextureId)
+        TextureHelper.deleteTexture(mOesTextureId)
         mFilterRender?.release()
     }
 
@@ -113,6 +121,14 @@ class GLTextureViewWrapper(
 
     fun particlesShowing(): Boolean {
         return mDrawParticles
+    }
+
+    fun isFilterMode(): Boolean {
+        return mDrawFilter
+    }
+
+    fun drawFilter(draw: Boolean) {
+        mDrawFilter = draw
     }
 
     fun onProgressChanged(progress: Int) {

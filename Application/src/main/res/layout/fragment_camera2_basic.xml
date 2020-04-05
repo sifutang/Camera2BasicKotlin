@@ -44,8 +44,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_above="@id/control"
-        android:layout_marginBottom="8dp"
-        android:progress="100"/>
+        android:layout_marginBottom="8dp"/>
 
     <FrameLayout
         android:id="@+id/control"
@@ -70,19 +69,26 @@
             android:text="@string/particle" />
 
         <Button
+            android:id="@+id/filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="@string/filter" />
+
+        <Button
             android:id="@+id/picture"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:text="@string/picture" />
 
-        <Button
+        <ImageView
             android:id="@+id/switchCamera"
             android:contentDescription="@string/description_info"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical|end"
-            android:text="@string/camera_switch"/>
+            android:src="@drawable/camera_switch"/>
     </FrameLayout>
 
 </RelativeLayout>

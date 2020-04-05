@@ -17,7 +17,6 @@
 package com.example.android.camera2basic
 
 import android.Manifest
-import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -39,6 +38,7 @@ import com.example.android.camera2basic.qrcode.QrScannerView
 import com.example.android.camera2basic.util.CommonUtil
 import com.google.zxing.*
 import com.google.zxing.common.HybridBinarizer
+import kotlinx.android.synthetic.main.fragment_camera2_basic.*
 import java.io.File
 import java.util.*
 import java.util.concurrent.Semaphore
@@ -74,7 +74,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * ID of the current [CameraDevice].
      */
     private lateinit var cameraId: String
-    private var lensType = CameraCharacteristics.LENS_FACING_BACK
+    private var lensType = CameraCharacteristics.LENS_FACING_FRONT
 
     private var cameraCharacteristics: CameraCharacteristics? = null
     private var cropRect: Rect? = null
@@ -94,6 +94,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * An [ImageView] for control flash on/off
      */
     private lateinit var qrFlashBtn: ImageView
+
+    private lateinit var seekBar: SeekBar
 
     /**
      * An [GLTextureViewWrapper] for wrap AutoFitTextureView
@@ -381,10 +383,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.particle).setOnClickListener(this)
         view.findViewById<View>(R.id.qr_btn).setOnClickListener(this)
         view.findViewById<View>(R.id.qr_flash_btn).setOnClickListener(this)
+        view.findViewById<View>(R.id.filter).setOnClickListener(this)
         textureView = view.findViewById(R.id.texture)
         qrScannerView = view.findViewById(R.id.qr_code)
         qrFlashBtn = view.findViewById(R.id.qr_flash_btn)
-        val seekBar = view.findViewById<View>(R.id.seekBar) as SeekBar
+        seekBar = view.findViewById<View>(R.id.seekBar) as SeekBar
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 glTextureViewWrapper?.onProgressChanged(progress)
@@ -625,6 +628,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             lensType = if (lensType == CameraCharacteristics.LENS_FACING_BACK)
                 CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
             openCamera(textureView.width, textureView.height)
+            seekBar.progress = 0
         }
     }
 
@@ -912,6 +916,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }
             R.id.qr_flash_btn -> {
 
+            }
+            R.id.filter -> {
+                if (glTextureViewWrapper != null) {
+                    val isFilter = glTextureViewWrapper!!.isFilterMode()
+                    glTextureViewWrapper!!.drawFilter(!isFilter)
+                }
             }
         }
     }

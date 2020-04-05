@@ -1,7 +1,9 @@
 package com.example.android.camera2basic.filter
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import com.example.android.camera2basic.R
 import com.example.android.camera2basic.util.ShaderProgram
 import com.example.android.camera2basic.util.TextureHelper
@@ -41,7 +43,7 @@ class FilterShaderProgram(context: Context) :
         uLookupTableLocation = GLES20.glGetUniformLocation(programId, LOOKUP_TABLE)
         uIntensityLocation = GLES20.glGetUniformLocation(programId, INTENSITY)
 
-        lookupTableId = TextureHelper.loadTexture(context, R.drawable.lookup)
+        lookupTableId = TextureHelper.loadTexture(context, R.drawable.makalong)
     }
 
     fun setUniform(textureId: Int,  intensity: Float) {
@@ -50,6 +52,19 @@ class FilterShaderProgram(context: Context) :
         GLES20.glUniform1i(uTextureSamplerLocation, 0)
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lookupTableId)
+        GLES20.glUniform1i(uLookupTableLocation, 1)
+
+        GLES20.glUniform1f(uIntensityLocation, intensity)
+    }
+
+    fun setUniform(textureId: Int, lookupTable: Bitmap, intensity: Float) {
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
+        GLES20.glUniform1i(uTextureSamplerLocation, 0)
+
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, lookupTable)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lookupTableId)
         GLES20.glUniform1i(uLookupTableLocation, 1)
 
