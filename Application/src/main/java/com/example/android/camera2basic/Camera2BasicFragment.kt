@@ -74,6 +74,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * ID of the current [CameraDevice].
      */
     private lateinit var cameraId: String
+    private var lensType = CameraCharacteristics.LENS_FACING_BACK
 
     private var cameraCharacteristics: CameraCharacteristics? = null
     private var cropRect: Rect? = null
@@ -376,7 +377,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         view.findViewById<View>(R.id.picture).setOnClickListener(this)
-        view.findViewById<View>(R.id.info).setOnClickListener(this)
+        view.findViewById<View>(R.id.switchCamera).setOnClickListener(this)
         view.findViewById<View>(R.id.particle).setOnClickListener(this)
         view.findViewById<View>(R.id.qr_btn).setOnClickListener(this)
         view.findViewById<View>(R.id.qr_flash_btn).setOnClickListener(this)
@@ -491,8 +492,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 // We don't use a front facing camera in this sample.
                 val cameraDirection = characteristics.get(CameraCharacteristics.LENS_FACING)
-                if (cameraDirection != null &&
-                        cameraDirection == CameraCharacteristics.LENS_FACING_FRONT) {
+                if (cameraDirection != null && cameraDirection != lensType) {
                     continue
                 }
 
@@ -501,8 +501,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 // For still image captures, we use the largest available size.
                 val largest = Collections.max(
-                        Arrays.asList(*map.getOutputSizes(ImageFormat.JPEG)),
-                        CompareSizesByArea())
+                        listOf(*map.getOutputSizes(ImageFormat.JPEG)),
+                        CompareSizesByArea()
+                )
                 imageReader = ImageReader.newInstance(largest.width, largest.height,
                         ImageFormat.JPEG, /*maxImages*/ 2).apply {
                     setOnImageAvailableListener(onImageAvailableListener, backgroundHandler)
@@ -512,18 +513,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 // coordinate.
                 val displayRotation = activity.windowManager.defaultDisplay.rotation
 
-                sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION)
+                sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
                 val swappedDimensions = areDimensionsSwapped(displayRotation)
 
                 val displaySize = Point()
                 activity.windowManager.defaultDisplay.getSize(displaySize)
                 val rotatedPreviewWidth = if (swappedDimensions) height else width
                 val rotatedPreviewHeight = if (swappedDimensions) width else height
-                var maxPreviewWidth = if (swappedDimensions) displaySize.y else displaySize.x
-                var maxPreviewHeight = if (swappedDimensions) displaySize.x else displaySize.y
-
-                if (maxPreviewWidth > MAX_PREVIEW_WIDTH) maxPreviewWidth = MAX_PREVIEW_WIDTH
-                if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) maxPreviewHeight = MAX_PREVIEW_HEIGHT
+                val maxPreviewWidth = if (swappedDimensions) displaySize.y else displaySize.x
+                val maxPreviewHeight = if (swappedDimensions) displaySize.x else displaySize.y
 
                 // Danger, W.R.! Attempting to use too large a preview size could exceed the camera
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
@@ -615,6 +613,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             throw RuntimeException("Interrupted while trying to lock camera opening.", e)
         }
 
+    }
+
+    /**
+     * Switch [CameraDevice]
+     */
+    private fun switchCamera() {
+        if (cropRect != null) {
+            cropRect = null
+            closeCamera()
+            lensType = if (lensType == CameraCharacteristics.LENS_FACING_BACK)
+                CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
+            openCamera(textureView.width, textureView.height)
+        }
     }
 
     /**
@@ -872,13 +883,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     override fun onClick(view: View) {
         when (view.id) {
             R.id.picture -> lockFocus()
-            R.id.info -> {
-                if (activity != null) {
-                    AlertDialog.Builder(activity)
-                            .setMessage(R.string.intro_message)
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show()
-                }
+            R.id.switchCamera -> {
+//                if (activity != null) {
+//                    AlertDialog.Builder(activity)
+//                            .setMessage(R.string.intro_message)
+//                            .setPositiveButton(android.R.string.ok, null)
+//                            .show()
+//                }
+                switchCamera()
             }
             R.id.particle -> {
                 if (glTextureViewWrapper != null) {
@@ -956,16 +968,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
          */
         private const val STATE_PICTURE_TAKEN = 4
 
-        /**
-         * Max preview width that is guaranteed by Camera2 API
-         */
-        private const val MAX_PREVIEW_WIDTH = 1920
-
-        /**
-         * Max preview height that is guaranteed by Camera2 API
-         */
-        private const val MAX_PREVIEW_HEIGHT = 1080
-
         private const val MSG_FLASH_REQUIRE = 10000
 
         private const val MSG_QR_CODE_RESULT = 10001
@@ -1014,13 +1016,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             // Pick the smallest of those big enough. If there is no one big enough, pick the
             // largest of those not big enough.
-            if (bigEnough.size > 0) {
-                return Collections.min(bigEnough, CompareSizesByArea())
-            } else if (notBigEnough.size > 0) {
-                return Collections.max(notBigEnough, CompareSizesByArea())
-            } else {
-                Log.e(TAG, "Couldn't find any suitable preview size")
-                return choices[0]
+            return when {
+                bigEnough.size > 0 -> {
+                    Collections.min(bigEnough, CompareSizesByArea())
+                }
+                notBigEnough.size > 0 -> {
+                    Collections.max(notBigEnough, CompareSizesByArea())
+                }
+                else -> {
+                    Log.e(TAG, "Couldn't find any suitable preview size")
+                    choices[0]
+                }
             }
         }
 
