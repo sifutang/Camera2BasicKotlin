@@ -19,6 +19,12 @@ class FilterRender(context: Context) {
                 1f, -1f, 1f, 0f
         )
 
+        private val lookupTables = listOf(
+                "lolita.png", "fresh.png", "coral.png", // index:678
+                "music.png", "origin.png", "oxygen.png", // index:345
+                "makalong.png", "glossy.png", "bearch.png" // index:012
+        )
+
         private const val TAG = "FilterRender"
         private const val VERTEX_COMPONENT_COUNT = 2
         private const val COORDINATE_COMPONENT_COUNT = 2
@@ -38,6 +44,7 @@ class FilterRender(context: Context) {
     private var renderHeight = -1
 
     private var filterProgress = 0f
+    private var selectFilterIndex = 4
 
     /**
      * w|h|x|y|x|y...
@@ -47,11 +54,6 @@ class FilterRender(context: Context) {
             ArrayList(FILTER_ITEM_COUNT * FILTER_ITEM_COUNT)
 
     init {
-        val lookupTables = listOf(
-                "lolita.png", "fresh.png", "coral.png", // index:678
-                "music.png", "makalong.png", "oxygen.png", // index:345
-                "first_love.png", "glossy.png", "bearch.png" // index:012
-        )
         for (effect in lookupTables) {
             val bitmap = BitmapFactory.decodeStream(context.assets.open("lookupfilter/$effect"))
             filterLookupTableBitmaps.add(bitmap)
@@ -109,7 +111,18 @@ class FilterRender(context: Context) {
         }
     }
 
-    fun drawTexture(transformMatrix: FloatArray, oesTextureId: Int) {
+    fun drawSelf(showSelect: Boolean, transformMatrix: FloatArray, oesTextureId: Int) {
+        if (showSelect) {
+            selectFilterIndex = -1
+        } else {
+            if (selectFilterIndex == -1) {
+                selectFilterIndex = 4
+            }
+        }
+        drawTexture(transformMatrix, oesTextureId)
+    }
+
+    private fun drawTexture(transformMatrix: FloatArray, oesTextureId: Int) {
         // convert oes to 2d
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer[0])
         GLES20.glViewport(0, 0, renderWith, renderHeight)
@@ -141,12 +154,18 @@ class FilterRender(context: Context) {
                 2, coordinateLoc, COORDINATE_COMPONENT_COUNT, STRIDE
         )
 
-        val itemW = filterPositions[0]
-        val itemH = filterPositions[1]
-        for (i in 0 until FILTER_ITEM_COUNT * FILTER_ITEM_COUNT) {
-            GLES20.glViewport(filterPositions[i * 2 + 2], filterPositions[i * 2 + 3], itemW, itemH)
-            filterShaderProgram.setUniform(
-                    frameBufferTexture[0], filterLookupTableBitmaps[i], filterProgress)
+        if (selectFilterIndex == -1) {
+            val itemW = filterPositions[0]
+            val itemH = filterPositions[1]
+            for (i in 0 until FILTER_ITEM_COUNT * FILTER_ITEM_COUNT) {
+                GLES20.glViewport(filterPositions[i * 2 + 2], filterPositions[i * 2 + 3], itemW, itemH)
+                filterShaderProgram.setUniform(
+                        frameBufferTexture[0], filterLookupTableBitmaps[i], filterProgress)
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+            }
+        } else {
+            GLES20.glViewport(0, 0, renderWith, renderHeight)
+            filterShaderProgram.setUniform(frameBufferTexture[0], filterLookupTableBitmaps[selectFilterIndex], filterProgress)
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         }
 
@@ -166,5 +185,26 @@ class FilterRender(context: Context) {
 
     fun onProgressChanged(progress: Int) {
         filterProgress = progress / 100f
+    }
+
+    fun onSingleTapUp(x: Float, y: Float): Int {
+        if (x < renderWith && y < renderHeight) {
+            // filter positions: left-bottom as (0, 0)
+            val normalY = renderHeight - y
+            val itemW = filterPositions[0]
+            val itemH = filterPositions[1]
+            for (i in 0 until FILTER_ITEM_COUNT * FILTER_ITEM_COUNT) {
+                val itemX = filterPositions[i * 2 + 2]
+                val itemY = filterPositions[i * 2 + 3]
+                if (x >= itemX && x <= itemX + itemW
+                        && normalY >= itemY && normalY <= itemY + itemH) {
+                    selectFilterIndex = i
+                    Log.d(TAG, "onSingleTapUp: $selectFilterIndex")
+                    return selectFilterIndex
+                }
+            }
+        }
+
+        return -1
     }
 }

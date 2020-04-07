@@ -18,6 +18,7 @@ package com.example.android.camera2basic
 
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 
@@ -25,10 +26,13 @@ class CameraActivity : AppCompatActivity() {
 
     interface OnTouchEventListener {
         fun onScale(scaleFactor: Float)
+
+        fun onSingleTapUp(x: Float, y: Float)
     }
     private var touchListener: OnTouchEventListener? = null
 
     private lateinit var scaleGestureDetector: ScaleGestureDetector
+    private lateinit var gestureDetector: GestureDetector
 
     private val scaleGestureDetectorListener = object : ScaleGestureDetector.OnScaleGestureListener {
         override fun onScaleBegin(detector: ScaleGestureDetector?): Boolean {
@@ -46,6 +50,33 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
+    private val gestureDetectorListener = object : GestureDetector.OnGestureListener {
+        override fun onShowPress(e: MotionEvent?) {
+        }
+
+        override fun onSingleTapUp(e: MotionEvent?): Boolean {
+            if (e != null) {
+                touchListener?.onSingleTapUp(e.x, e.y)
+            }
+            return true
+        }
+
+        override fun onDown(e: MotionEvent?): Boolean {
+            return true
+        }
+
+        override fun onFling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float): Boolean {
+            return false
+        }
+
+        override fun onScroll(e1: MotionEvent?, e2: MotionEvent?, distanceX: Float, distanceY: Float): Boolean {
+            return false
+        }
+
+        override fun onLongPress(e: MotionEvent?) {
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_camera)
@@ -54,11 +85,12 @@ class CameraActivity : AppCompatActivity() {
                 .commit()
 
         scaleGestureDetector = ScaleGestureDetector(this, scaleGestureDetectorListener)
-
+        gestureDetector = GestureDetector(this, gestureDetectorListener)
     }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         scaleGestureDetector.onTouchEvent(event)
+        gestureDetector.onTouchEvent(event)
         return super.onTouchEvent(event)
     }
 

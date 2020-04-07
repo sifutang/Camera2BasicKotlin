@@ -5,7 +5,6 @@ import android.graphics.SurfaceTexture
 import android.opengl.GLES20
 import android.util.Log
 import android.util.Size
-import com.example.android.camera2basic.camera.CameraRender
 import com.example.android.camera2basic.filter.FilterRender
 import com.example.android.camera2basic.particles.ParticlesRender
 import com.example.android.camera2basic.util.EglHelper
@@ -25,7 +24,6 @@ class GLTextureViewWrapper(
     private var eglHelper = EglHelper(outputSurfaceTexture)
     private var mInputSurfaceTexture: SurfaceTexture? = null
 
-    private var mCameraRender: CameraRender? = null
     private var mFilterRender: FilterRender? = null
     private var mParticleRender: ParticlesRender? = null
     private var mWaterMarkRender: WaterMarkRender? = null
@@ -53,7 +51,6 @@ class GLTextureViewWrapper(
         Log.d(TAG, "onSurfaceCreated")
         mOesTextureId = TextureHelper.createOESTextureObject()
 
-        mCameraRender = CameraRender(context)
         mFilterRender = FilterRender(context)
         mParticleRender = ParticlesRender(context)
         mWaterMarkRender = WaterMarkRender(context)
@@ -81,12 +78,10 @@ class GLTextureViewWrapper(
         GLES20.glClearColor(0f, 0f, 0f, 0f)
         mInputSurfaceTexture!!.updateTexImage()
         mInputSurfaceTexture!!.getTransformMatrix(transformMatrix)
-        if (mDrawFilter) {
-            mFilterRender?.drawTexture(transformMatrix, mOesTextureId)
-        } else {
-            mCameraRender?.drawTexture(transformMatrix, mOesTextureId)
+        if (!mDrawFilter) {
+            mWaterMarkRender?.drawSelf()
         }
-        mWaterMarkRender?.drawSelf()
+        mFilterRender?.drawSelf(mDrawFilter, transformMatrix, mOesTextureId)
         if (mDrawParticles) {
             mParticleRender?.drawSelf()
         }
@@ -133,5 +128,14 @@ class GLTextureViewWrapper(
 
     fun onProgressChanged(progress: Int) {
         mFilterRender?.onProgressChanged(progress)
+    }
+
+    fun onSingleTapUp(x: Float, y: Float) {
+        if (mDrawFilter) {
+            val selectIndex = mFilterRender?.onSingleTapUp(x, y) ?: -1
+            if (selectIndex > -1) {
+                mDrawFilter = false
+            }
+        }
     }
 }

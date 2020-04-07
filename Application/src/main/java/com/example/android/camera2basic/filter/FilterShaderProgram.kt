@@ -43,7 +43,7 @@ class FilterShaderProgram(context: Context) :
         uLookupTableLocation = GLES20.glGetUniformLocation(programId, LOOKUP_TABLE)
         uIntensityLocation = GLES20.glGetUniformLocation(programId, INTENSITY)
 
-        lookupTableId = TextureHelper.loadTexture(context, R.drawable.makalong)
+        lookupTableId = TextureHelper.loadTexture(context, R.drawable.origin)
     }
 
     fun setUniform(textureId: Int,  intensity: Float) {

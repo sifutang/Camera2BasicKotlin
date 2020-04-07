@@ -422,7 +422,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 captureCallback, backgroundHandler)
                     }
                 }
+            }
 
+            override fun onSingleTapUp(x: Float, y: Float) {
+                glTextureViewWrapper?.onSingleTapUp(x, y)
             }
         })
     }
